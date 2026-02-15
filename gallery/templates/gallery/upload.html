@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <title>Загрузка модели</title>
-    <!-- Простой CSS для наглядности (пока без внешних файлов) -->
+    <!-- Three.js -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
     <style>
       body {
         font-family: sans-serif;
@@ -14,25 +22,131 @@
       .form-group {
         margin-bottom: 1rem;
       }
+      #preview-container {
+        width: 300px;
+        height: 200px;
+        border: 2px solid #ccc;
+        margin: 1rem 0;
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
       button {
         padding: 10px 20px;
         cursor: pointer;
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
       }
     </style>
   </head>
   <body>
     <h1>Загрузить новую 3D модель</h1>
-    <!-- 
-        1. method="post": Чтобы отправить данные.
-        2. enctype="multipart/form-data": ОБЯЗАТЕЛЬНО для файлов! 
-    -->
+    
     <form method="post" enctype="multipart/form-data">
-      <!-- Защита от хакеров -->
       {% csrf_token %}
-      <!-- Django сам нарисует label и input для всех полей -->
-      <div class="form-group">{{ form.as_p }}</div>
-      <button type="submit">Загрузить в базу</button>
+      
+      <div class="form-group">
+        {{ form.as_p }}
+        
+        <!-- 4. Серый квадрат для превью -->
+        <div id="preview-container">Выберите .glb файл</div>
+        
+        <!-- 2. Скрытое поле для Base64 картинки -->
+        <input type="hidden" id="id_image_data" name="image_data">
+        
+        <!-- 2. Кнопка изначально неактивна -->
+        <button type="submit" id="submit-btn" disabled>Загрузить в базу</button>
+      </div>
     </form>
+    
+    <!-- JavaScript для превью -->
+    <script type="module">
+      import * as THREE from 'three';
+      import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+      
+      console.log('🔥 Three.js старт');
+      
+      // ИСПРАВЛЕННЫЙ селектор для Django формы
+      const fileInput = document.querySelector('input[name="file"]') || document.querySelector('#id_file');
+      const previewContainer = document.getElementById('preview-container');
+      const hiddenInput = document.getElementById('id_image_data');
+      const submitBtn = document.getElementById('submit-btn');
+      
+      console.log('Элементы:', { fileInput, previewContainer, hiddenInput, submitBtn });
+      
+      if (fileInput) {
+        fileInput.addEventListener('change', function(e) {
+          console.log('📁 Файл выбран!');
+          const file = e.target.files[0];
+          if (file && file.name.toLowerCase().endsWith('.glb')) {
+            previewContainer.innerHTML = 'Генерация...';
+            const url = URL.createObjectURL(file);
+            generateThumbnail(url);
+          } else {
+            previewContainer.innerHTML = 'Только .glb файлы!';
+          }
+        });
+      }
+      
+      function generateThumbnail(modelUrl) {
+        console.log('🎬 Генерация превью');
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+        
+        const camera = new THREE.PerspectiveCamera(45, 300/200, 0.1, 100);
+        const renderer = new THREE.WebGLRenderer({ 
+          antialias: true, 
+          preserveDrawingBuffer: true 
+        });
+        renderer.setSize(300, 200);
+        
+        previewContainer.innerHTML = '';
+        previewContainer.style.position = 'relative';
+        previewContainer.appendChild(renderer.domElement);
+        
+        // Свет
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+        
+        const loader = new GLTFLoader();
+        loader.load(modelUrl, 
+          (gltf) => {
+            console.log('✅ Модель загружена!');
+            const model = gltf.scene;
+            
+            // Центрирование
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.sub(center);
+            
+            scene.add(model);
+            camera.position.z = 5;
+            camera.lookAt(0, 0, 0);
+            
+            renderer.render(scene, camera);
+            
+            // Сохраняем картинку
+            hiddenInput.value = renderer.domElement.toDataURL('image/jpeg', 0.8);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Загрузить в базу ✅';
+            
+            console.log('🎉 Превью готово!');
+          },
+          undefined,
+          (error) => {
+            console.error('❌ Ошибка GLB:', error);
+            previewContainer.innerHTML = 'Ошибка GLB файла';
+          }
+        );
+      }
+    </script>
+    
     <br />
     <a href="{% url 'home' %}">← Назад в галерею</a>
   </body>
