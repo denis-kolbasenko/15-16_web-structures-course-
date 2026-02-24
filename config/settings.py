@@ -28,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-secret-key')
 
 # os.getenv возвращает строку. Нам нужно превратить строку 'True' в булево True.
-DEBUG = os.getenv('DEBUG') == 'True'
+DEBUG = os.getenv('DEBUG') == 'False'
 # Разрешенные хосты. В продакшене здесь будет имя сайта.
 # Звездочка * разрешает всем (пока оставим так для простоты)
 ALLOWED_HOSTS = ['*'] 
